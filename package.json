@@ -1,0 +1,20 @@
+{
+  "name": "file-uploader",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@quixo3/prisma-session-store": "^3.1.13",
+    "express-session": "^1.18.2",
+    "nodemon": "^3.1.10",
+    "passport": "^0.7.0",
+    "prisma": "^6.15.0"
+  }
+}
