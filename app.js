@@ -12,6 +12,9 @@ const bcrypt = require("bcryptjs");
 const { pool } = require("./db/pool");
 const { createUser } = require("./db/queries");
 
+const multer = require("multer");
+const upload = multer({ dest: "uploads/" });
+
 const app = express();
 app.set("views", path.join(__dirname, "views"));
 app.set("view engine", "ejs");
@@ -58,6 +61,11 @@ app.get("/sign-up", (req, res) => {
   res.render("sign-up-form");
 });
 
+app.get("/after-login", ensureAuth, (req, res) => {
+  console.log("after-login user:", req.user);
+  res.render("landing-page", { user: req.user });
+});
+
 //--- POST ROUTES ---//
 
 app.post("/sign-up", async (req, res, next) => {
@@ -87,10 +95,18 @@ app.post("/login", (req, res, next) => {
   })(req, res, next);
 });
 
-app.get("/after-login", ensureAuth, (req, res) => {
-  console.log("after-login user:", req.user);
-  res.render("landing-page", { user: req.user });
-});
+app.post(
+  "/upload",
+  ensureAuth,
+  upload.single("uploaded_file"),
+  (req, res, next) => {
+    console.log({ user: req.user, file_size: req.file.size });
+    res.render("landing-page", {
+      user: req.user,
+      uploadSuccess: true,
+    });
+  }
+);
 
 const PORT = process.env.PORT || 3000;
 
