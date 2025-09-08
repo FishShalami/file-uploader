@@ -126,6 +126,98 @@ async function createFile(meta) {
   });
 }
 
+// Rename a folder (simple + explicit)
+async function renameFolder(folderId, ownerId, newName) {
+  const name = String(newName || "").trim();
+  if (!name) throw new Error("New folder name is required.");
+
+  // 1) Ensure the folder exists and is owned by this user
+  const folder = await prisma.folder.findFirst({
+    where: { id: folderId, ownerId },
+    select: { id: true, parentId: true },
+  });
+  if (!folder) throw new Error("Folder not found.");
+
+  // 2) Prevent duplicate name among siblings (same parent)
+  const dup = await prisma.folder.findFirst({
+    where: { ownerId, parentId: folder.parentId, name },
+    select: { id: true },
+  });
+  if (dup && dup.id !== folderId) {
+    throw new Error("A folder with that name already exists here.");
+  }
+
+  // 3) Update
+  return prisma.folder.update({
+    where: { id: folderId },
+    data: { name },
+    select: { id: true, name: true },
+  });
+}
+
+// Rename a file (simple + explicit)
+async function renameFile(fileId, ownerId, newName) {
+  const name = String(newName || "").trim();
+  if (!name) throw new Error("New filename is required.");
+
+  // 1) Ensure the file exists and is owned by this user
+  const file = await prisma.file.findFirst({
+    where: { id: fileId, ownerId },
+    select: { id: true, folderId: true },
+  });
+  if (!file) throw new Error("File not found.");
+
+  // 2) Prevent duplicate name in the same folder
+  const dup = await prisma.file.findFirst({
+    where: { folderId: file.folderId, originalName: name },
+    select: { id: true },
+  });
+  if (dup && dup.id !== fileId) {
+    throw new Error("A file with that name already exists in this folder.");
+  }
+
+  // 3) Update only the display name; disk key is unchanged
+  return prisma.file.update({
+    where: { id: fileId },
+    data: { originalName: name },
+    select: { id: true, originalName: true },
+  });
+}
+
+// Delete a folder (blocks if there are subfolders)
+async function deleteFolder(folderId, ownerId) {
+  // Check folder exists + ownership
+  const folder = await prisma.folder.findFirst({
+    where: { id: folderId, ownerId },
+    select: { id: true },
+  });
+  if (!folder) throw new Error("Folder not found.");
+
+  // Block if there are child folders
+  const childCount = await prisma.folder.count({
+    where: { ownerId, parentId: folderId },
+  });
+  if (childCount > 0) {
+    throw new Error("Folder has subfolders. Delete or move them first.");
+  }
+
+  // Files in this folder will be deleted by DB (onDelete: Cascade)
+  await prisma.folder.delete({ where: { id: folderId } });
+}
+
+// Minimal helper to fetch file meta needed to delete from disk
+async function getFileMeta(fileId, ownerId) {
+  return prisma.file.findFirst({
+    where: { id: fileId, ownerId },
+    select: { id: true, folderId: true, key: true, originalName: true },
+  });
+}
+
+// Remove the DB record (call AFTER disk unlink)
+async function deleteFileRecord(fileId) {
+  await prisma.file.delete({ where: { id: fileId } });
+}
+
 module.exports = {
   createUser,
   findUserByUsername,
@@ -136,4 +228,9 @@ module.exports = {
   listFiles,
   createFolder,
   createFile,
+  renameFolder,
+  renameFile,
+  deleteFileRecord,
+  getFileMeta,
+  deleteFolder,
 };

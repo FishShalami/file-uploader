@@ -62,15 +62,25 @@
         <% if (folders && folders.length) { %>
             <ul>
                 <% folders.forEach(f=> { %>
-                    <li><a href="/drive/<%= f.id %>">
+                    <li>
+                        <a href="/drive/<%= f.id %>">
                             <%= f.name %>
-                        </a></li>
+                        </a>
+                        <button type="button" style="margin-left:8px;"
+                            onclick="renameItem('folder', <%= f.id %>, '<%- f.name.replace(/'/g, '&#39;') %>')">
+                            Rename
+                        </button>
+
+                        <button type="button" style="margin-left:6px;color:#a00;"
+                            onclick="deleteItem('folder', <%= f.id %>, '<%- f.name.replace(/'/g, '&#39;') %>')">Delete</button>
+                    </li>
                     <% }) %>
             </ul>
             <% } else { %>
                 <p>No folders here yet.</p>
                 <% } %>
     </section>
+
 
     <!-- Files -->
     <section>
@@ -80,6 +90,13 @@
                 <% files.forEach(file=> { %>
                     <li>
                         <%= file.originalName %>
+                            <button type="button" style="margin-left:8px;"
+                                onclick="renameItem('file', <%= file.id %>, '<%- file.originalName.replace(/'/g, '&#39;') %>')">
+                                Rename
+                            </button>
+
+                            <button type="button" style="margin-left:6px;color:#a00;"
+                                onclick="deleteItem('file', <%= file.id %>, '<%- file.originalName.replace(/'/g, '&#39;') %>')">Delete</button>
                     </li>
                     <% }) %>
             </ul>
@@ -87,6 +104,52 @@
                 <p>No files in this folder.</p>
                 <% } %>
     </section>
+
+    <script>
+        function renameItem(type, id, currentName) {
+            const newName = prompt("Enter a new name:", currentName);
+            if (newName == null) return;
+            const trimmed = newName.trim();
+            if (!trimmed) return;
+
+            const form = document.createElement("form");
+            form.method = "post";
+            form.action = type === "folder" ? `/folders/${id}/rename` : `/files/${id}/rename`;
+
+            const nameInput = document.createElement("input");
+            nameInput.type = "hidden";
+            nameInput.name = "name";
+            nameInput.value = trimmed;
+            form.appendChild(nameInput);
+
+            const returnTo = document.createElement("input");
+            returnTo.type = "hidden";
+            returnTo.name = "returnTo";
+            returnTo.value = "<%= currentFolder ? '/drive/' + currentFolder.id : '/drive' %>";
+            form.appendChild(returnTo);
+
+            document.body.appendChild(form);
+            form.submit();
+        }
+
+        function deleteItem(type, id, displayName) {
+            if (!confirm(`Delete this ${type}: "${displayName}"?\nThis cannot be undone.`)) return;
+
+            const form = document.createElement("form");
+            form.method = "post";
+            form.action = type === "folder" ? `/folders/${id}/delete` : `/files/${id}/delete`;
+
+            const returnTo = document.createElement("input");
+            returnTo.type = "hidden";
+            returnTo.name = "returnTo";
+            returnTo.value = "<%= currentFolder ? '/drive/' + currentFolder.id : '/drive' %>";
+            form.appendChild(returnTo);
+
+            document.body.appendChild(form);
+            form.submit();
+        }
+    </script>
+
 </body>
 
 </html>

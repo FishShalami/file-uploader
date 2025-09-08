@@ -19,6 +19,11 @@ const {
   listFiles,
   createFolder,
   createFile,
+  renameFile,
+  renameFolder,
+  deleteFolder,
+  getFileMeta,
+  deleteFileRecord,
 } = require("./db/queries");
 
 const multer = require("multer");
@@ -217,6 +222,105 @@ app.post("/folders", ensureAuth, async (req, res, next) => {
     return parentId
       ? res.redirect(`/drive/${parentId}`)
       : res.redirect("/drive");
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Rename a folder
+app.post("/folders/:id/rename", ensureAuth, async (req, res, next) => {
+  try {
+    if (!/^\d+$/.test(req.params.id))
+      return res.status(400).send("Invalid folder id");
+    const ownerId = req.user.id;
+    const folderId = Number(req.params.id);
+    const newName = String(req.body.name || "").trim();
+
+    await renameFolder(folderId, ownerId, newName);
+
+    const returnTo = req.body.returnTo || req.headers.referer || "/drive";
+    return res.redirect(returnTo);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Rename a file
+app.post("/files/:id/rename", ensureAuth, async (req, res, next) => {
+  try {
+    if (!/^\d+$/.test(req.params.id))
+      return res.status(400).send("Invalid file id");
+    const ownerId = req.user.id;
+    const fileId = Number(req.params.id);
+    const newName = String(req.body.name || "").trim();
+
+    await renameFile(fileId, ownerId, newName);
+
+    const returnTo = req.body.returnTo || req.headers.referer || "/drive";
+    return res.redirect(returnTo);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE FOLDER
+app.post("/folders/:id/delete", ensureAuth, async (req, res, next) => {
+  try {
+    if (!/^\d+$/.test(req.params.id))
+      return res.status(400).send("Invalid folder id");
+    const ownerId = req.user.id;
+    const folderId = Number(req.params.id);
+
+    // (Optional) fetch parent to build a fallback redirect
+    const f = await getFolder(folderId, ownerId); // includes parent
+    if (!f) return res.status(404).send("Folder not found");
+
+    await deleteFolder(folderId, ownerId);
+
+    const returnTo =
+      req.body.returnTo ||
+      req.headers.referer ||
+      (f.parent ? `/drive/${f.parent.id}` : "/drive");
+
+    return res.redirect(returnTo);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// DELETE FILE (disk + DB)
+const fsp = require("node:fs/promises");
+
+app.post("/files/:id/delete", ensureAuth, async (req, res, next) => {
+  try {
+    if (!/^\d+$/.test(req.params.id))
+      return res.status(400).send("Invalid file id");
+    const ownerId = req.user.id;
+    const fileId = Number(req.params.id);
+
+    // 1) Get file info (owner-scoped)
+    const meta = await getFileMeta(fileId, ownerId);
+    if (!meta) return res.status(404).send("File not found");
+
+    // 2) Delete from disk (ignore if already missing)
+    const diskPath = path.join(
+      __dirname,
+      "uploads",
+      String(meta.folderId),
+      meta.key
+    );
+    try {
+      await fsp.unlink(diskPath);
+    } catch (e) {
+      if (e && e.code !== "ENOENT") throw e; // ignore missing, bubble up other errors
+    }
+
+    // 3) Remove DB record
+    await deleteFileRecord(fileId);
+
+    const returnTo =
+      req.body.returnTo || req.headers.referer || `/drive/${meta.folderId}`;
+    return res.redirect(returnTo);
   } catch (err) {
     next(err);
   }
