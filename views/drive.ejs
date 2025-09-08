@@ -89,15 +89,19 @@
             <ul>
                 <% files.forEach(file=> { %>
                     <li>
-                        <%= file.originalName %>
-                            <button type="button" style="margin-left:8px;"
-                                onclick="renameItem('file', <%= file.id %>, '<%- file.originalName.replace(/'/g, '&#39;') %>')">
-                                Rename
-                            </button>
-
-                            <button type="button" style="margin-left:6px;color:#a00;"
-                                onclick="deleteItem('file', <%= file.id %>, '<%- file.originalName.replace(/'/g, '&#39;') %>')">Delete</button>
+                        <a href="/files/<%= file.id %>">
+                            <%= file.originalName %>
+                        </a>
+                        <button type="button" style="margin-left:8px;"
+                            onclick="renameItem('file', <%= file.id %>, '<%- file.originalName.replace(/'/g, '&#39;') %>')">
+                            Rename
+                        </button>
+                        <button type="button" style="margin-left:6px;color:#a00;"
+                            onclick="deleteItem('file', <%= file.id %>, '<%- file.originalName.replace(/'/g, '&#39;') %>')">
+                            Delete
+                        </button>
                     </li>
+
                     <% }) %>
             </ul>
             <% } else { %>

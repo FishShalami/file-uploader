@@ -24,6 +24,7 @@ const {
   deleteFolder,
   getFileMeta,
   deleteFileRecord,
+  getFileDetails,
 } = require("./db/queries");
 
 const multer = require("multer");
@@ -146,6 +147,54 @@ app.get("/drive/:folderId", ensureAuth, async (req, res, next) => {
       parentChain,
       folders,
       files,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Show a file's details page
+app.get("/files/:id", ensureAuth, async (req, res, next) => {
+  try {
+    if (!/^\d+$/.test(req.params.id))
+      return res.status(400).send("Invalid file id");
+    const ownerId = req.user.id;
+    const fileId = Number(req.params.id);
+
+    const file = await getFileDetails(fileId, ownerId);
+    if (!file) return res.status(404).send("File not found");
+
+    res.render("file-detail", { user: req.user, file });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Download the file
+app.get("/files/:id/download", ensureAuth, async (req, res, next) => {
+  try {
+    if (!/^\d+$/.test(req.params.id))
+      return res.status(400).send("Invalid file id");
+    const ownerId = req.user.id;
+    const fileId = Number(req.params.id);
+
+    // Minimal: reuse details/meta to get folderId + key
+    const file = await getFileDetails(fileId, ownerId);
+    if (!file) return res.status(404).send("File not found");
+
+    const diskPath = path.join(
+      __dirname,
+      "uploads",
+      String(file.folderId),
+      file.key
+    );
+    // res.download streams the file and sets Content-Disposition: attachment
+    return res.download(diskPath, file.originalName, (err) => {
+      if (err) {
+        if (err.code === "ENOENT")
+          return res.status(404).send("File missing on disk");
+        return next(err);
+      }
     });
   } catch (err) {
     next(err);

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>File Details</title>
+</head>
+
+<body>
+    <h1>File Details</h1>
+
+    <p><strong>Name:</strong>
+        <%= file.originalName %>
+    </p>
+    <p><strong>MIME Type:</strong>
+        <%= file.mimeType %>
+    </p>
+    <p><strong>Size (bytes):</strong>
+        <%= file.sizeBytes %>
+    </p>
+    <p><strong>Extension:</strong>
+        <%= file.ext %>
+    </p>
+    <p><strong>Uploaded:</strong>
+        <%= file.createdAt.toISOString() %>
+    </p>
+    <p><strong>Folder:</strong>
+        <a href="/drive/<%= file.folderId %>">
+            <%= file.folder?.name || ('#' + file.folderId) %>
+        </a>
+    </p>
+
+    <p>
+        <a href="/files/<%= file.id %>/download">Download file</a>
+    </p>
+
+    <p>
+        <a href="/drive/<%= file.folderId %>">&larr; Back to folder</a>
+    </p>
+</body>
+
+</html>
