@@ -8,9 +8,7 @@ const passport = require("passport");
 const { PrismaSessionStore } = require("@quixo3/prisma-session-store");
 const { prisma } = require("./db/prisma");
 
-const bcrypt = require("bcryptjs");
 // const { pool } = require("./db/pool");
-const { createUser } = require("./db/queries");
 
 const {
   getRoot,
@@ -26,6 +24,16 @@ const {
   deleteFileRecord,
   getFileDetails,
 } = require("./db/queries");
+
+const {
+  getIndex,
+  getSignupForm,
+  postSignup,
+  postLogin,
+  getAfterLogin,
+} = require("./controllers/authController");
+
+const { postCreateFolder } = require("./controllers/driveController");
 
 const multer = require("multer");
 const fs = require("node:fs/promises");
@@ -97,18 +105,11 @@ function ensureAuth(req, res, next) {
 
 // --- GET ROUTES --- //
 
-app.get("/", (req, res) => {
-  res.render("index");
-});
+app.get("/", getIndex);
 
-app.get("/sign-up", (req, res) => {
-  res.render("sign-up-form");
-});
+app.get("/sign-up", getSignupForm);
 
-app.get("/after-login", ensureAuth, (req, res) => {
-  console.log("after-login user:", req.user);
-  res.redirect("/drive");
-});
+app.get("/after-login", ensureAuth, getAfterLogin);
 
 app.get("/drive", ensureAuth, async (req, res, next) => {
   try {
@@ -203,32 +204,9 @@ app.get("/files/:id/download", ensureAuth, async (req, res, next) => {
 
 //--- POST ROUTES ---//
 
-app.post("/sign-up", async (req, res, next) => {
-  try {
-    const passwordHash = await bcrypt.hash(req.body.password, 10);
-    await createUser({ username: req.body.username, passwordHash });
+app.post("/sign-up", postSignup);
 
-    res.redirect("/");
-  } catch (err) {
-    if (err.code === "DUPLICATE") {
-      return res.status(400).send("Username taken");
-    }
-    next(err);
-  }
-});
-
-app.post("/login", (req, res, next) => {
-  passport.authenticate("local", (err, user) => {
-    if (err) return next(err);
-    if (!user) {
-      return res.redirect("/");
-    }
-    req.logIn(user, (err) => {
-      if (err) return next(err);
-      return res.redirect("/after-login");
-    });
-  })(req, res, next);
-});
+app.post("/login", postLogin);
 
 app.post(
   "/upload",
@@ -260,21 +238,7 @@ app.post(
   }
 );
 
-app.post("/folders", ensureAuth, async (req, res, next) => {
-  try {
-    const ownerId = req.user.id;
-    const name = String(req.body.name || "").trim();
-    const parentId = req.body.parentId ? Number(req.body.parentId) : null;
-
-    const folder = await createFolder(name, ownerId, parentId);
-    // Redirect to parent (or root if created at root)
-    return parentId
-      ? res.redirect(`/drive/${parentId}`)
-      : res.redirect("/drive");
-  } catch (err) {
-    next(err);
-  }
-});
+app.post("/folders", ensureAuth);
 
 // Rename a folder
 app.post("/folders/:id/rename", ensureAuth, async (req, res, next) => {
