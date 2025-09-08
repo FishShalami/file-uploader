@@ -9,11 +9,49 @@ const { PrismaSessionStore } = require("@quixo3/prisma-session-store");
 const { prisma } = require("./db/prisma");
 
 const bcrypt = require("bcryptjs");
-const { pool } = require("./db/pool");
+// const { pool } = require("./db/pool");
 const { createUser } = require("./db/queries");
 
+const {
+  getRoot,
+  getFolder,
+  listChildren,
+  listFiles,
+  createFolder,
+  createFile,
+} = require("./db/queries");
+
 const multer = require("multer");
-const upload = multer({ dest: "uploads/" });
+const fs = require("node:fs/promises");
+const crypto = require("node:crypto");
+
+const storage = multer.diskStorage({
+  async destination(req, file, cb) {
+    try {
+      const folderId = String(req.body.folderId || "").trim();
+      // keep it simple, but ensure it exists
+      if (!folderId) return cb(new Error("folderId is required"));
+      // optional: ensure numeric
+      if (!/^\d+$/.test(folderId))
+        return cb(new Error("folderId must be numeric"));
+      const dir = path.join(__dirname, "uploads", folderId);
+      await fs.mkdir(dir, { recursive: true }); // creates nested dirs if missing
+      cb(null, dir);
+    } catch (err) {
+      cb(err);
+    }
+  },
+  filename(req, file, cb) {
+    const ext = path.extname(file.originalname || "");
+    const key = `${crypto.randomUUID()}${ext}`; // prevents collisions
+    cb(null, key);
+  },
+});
+
+const upload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+});
 
 const app = express();
 app.set("views", path.join(__dirname, "views"));
@@ -63,7 +101,50 @@ app.get("/sign-up", (req, res) => {
 
 app.get("/after-login", ensureAuth, (req, res) => {
   console.log("after-login user:", req.user);
-  res.render("landing-page", { user: req.user });
+  res.redirect("/drive");
+});
+
+app.get("/drive", ensureAuth, async (req, res, next) => {
+  try {
+    const ownerId = req.user.id;
+    const folders = await getRoot(ownerId);
+    // No files at root in our simple model (files live inside a folder)
+    res.render("drive", {
+      user: req.user,
+      currentFolder: null,
+      parentChain: [], // breadcrumb for root is empty
+      folders,
+      files: [],
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+app.get("/drive/:folderId", ensureAuth, async (req, res, next) => {
+  try {
+    const ownerId = req.user.id;
+    const folderId = Number(req.params.folderId);
+    const currentFolder = await getFolder(folderId, ownerId);
+    if (!currentFolder) return res.status(404).send("Folder not found");
+
+    const folders = await listChildren(folderId, ownerId);
+    const files = await listFiles(folderId, ownerId);
+
+    // Minimal breadcrumb: just parent if exists (we’ll keep it simple)
+    const parentChain = [];
+    if (currentFolder.parent) parentChain.push(currentFolder.parent);
+
+    res.render("drive", {
+      user: req.user,
+      currentFolder,
+      parentChain,
+      folders,
+      files,
+    });
+  } catch (err) {
+    next(err);
+  }
 });
 
 //--- POST ROUTES ---//
@@ -99,14 +180,47 @@ app.post(
   "/upload",
   ensureAuth,
   upload.single("uploaded_file"),
-  (req, res, next) => {
-    console.log({ user: req.user, file_size: req.file.size });
-    res.render("landing-page", {
-      user: req.user,
-      uploadSuccess: true,
-    });
+  async (req, res, next) => {
+    try {
+      const ownerId = req.user.id;
+      const folderId = Number(req.body.folderId);
+      if (!folderId) throw new Error("folderId is required");
+
+      const f = req.file;
+      if (!f) throw new Error("No file uploaded");
+
+      await createFile({
+        ownerId,
+        folderId,
+        originalName: f.originalname,
+        key: f.filename, // the saved disk name
+        mimeType: f.mimetype,
+        sizeBytes: f.size,
+        ext: path.extname(f.originalname || ""),
+      });
+
+      return res.redirect(`/drive/${folderId}`);
+    } catch (err) {
+      next(err);
+    }
   }
 );
+
+app.post("/folders", ensureAuth, async (req, res, next) => {
+  try {
+    const ownerId = req.user.id;
+    const name = String(req.body.name || "").trim();
+    const parentId = req.body.parentId ? Number(req.body.parentId) : null;
+
+    const folder = await createFolder(name, ownerId, parentId);
+    // Redirect to parent (or root if created at root)
+    return parentId
+      ? res.redirect(`/drive/${parentId}`)
+      : res.redirect("/drive");
+  } catch (err) {
+    next(err);
+  }
+});
 
 const PORT = process.env.PORT || 3000;
 

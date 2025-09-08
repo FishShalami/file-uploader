@@ -14,15 +14,71 @@ datasource db {
 }
 
 model User {
-  id      Int      @id @default(autoincrement())
-  username   String   @unique
-  password  String
+  id       Int      @id @default(autoincrement())
+  username String   @unique
+  password String
+  Folder   Folder[]
+  File     File[]
 }
-
 
 model Session {
   id        String   @id @default(cuid())
   sid       String   @unique
-  data      String   
-  expiresAt   DateTime
+  data      String
+  expiresAt DateTime
+}
+
+/// Folder = nested containers using adjacency-list via `parentId`.
+model Folder {
+  id   Int    @id @default(autoincrement())
+  name String
+
+  // Ownership (each user has their own tree)
+  ownerId Int
+  owner   User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  // Adjacency list
+  parentId Int?
+  parent   Folder?  @relation("FolderToChildren", fields: [parentId], references: [id], onDelete: Restrict)
+  children Folder[] @relation("FolderToChildren")
+
+  // Files in this folder
+  files File[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Enforces unique folder names per parent per user.
+  // Caveat: when parentId is NULL (root), Postgres allows multiple NULLs;
+  // we’ll handle "unique root name per user" in application logic later.
+  @@unique([ownerId, parentId, name])
+  @@index([ownerId])
+  @@index([parentId])
+}
+
+/// File = stored on disk, metadata in DB
+model File {
+  id Int @id @default(autoincrement())
+
+  // Location
+  folderId Int
+  folder   Folder @relation(fields: [folderId], references: [id], onDelete: Cascade)
+
+  // Ownership (mirrors folder owner for simpler queries and auditing)
+  ownerId Int
+  owner   User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  // Display + storage metadata
+  originalName String // what the user uploaded (shown in UI)
+  key          String @unique // actual stored filename/key (e.g., uuid + ext)
+  mimeType     String
+  sizeBytes    Int
+  ext          String // like ".pdf" (we’ll fill via path.extname at upload)
+
+  createdAt DateTime @default(now())
+
+  // Prevent duplicate filenames in the same folder
+  @@unique([folderId, originalName])
+  @@index([folderId])
+  @@index([ownerId])
 }

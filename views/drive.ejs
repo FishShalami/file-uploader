@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <title>Drive</title>
+</head>
+
+<body>
+    <h1>Your Drive</h1>
+
+    <!-- Breadcrumb -->
+    <nav>
+        <a href="/drive">root</a>
+        <% if (parentChain && parentChain.length) { %>
+            &nbsp;→&nbsp;<a href="/drive/<%= parentChain[0].id %>">
+                <%= parentChain[0].name %>
+            </a>
+            <% } %>
+                <% if (currentFolder) { %>
+                    &nbsp;→&nbsp;<strong>
+                        <%= currentFolder.name %>
+                    </strong>
+                    <% } %>
+    </nav>
+
+    <hr />
+
+    <!-- Create Folder Form -->
+    <section>
+        <h3>Create Folder</h3>
+        <form action="/folders" method="post">
+            <input type="text" name="name" placeholder="New folder name" required>
+            <% if (currentFolder) { %>
+                <input type="hidden" name="parentId" value="<%= currentFolder.id %>">
+                <% } %>
+                    <button type="submit">Create</button>
+        </form>
+    </section>
+
+    <hr />
+
+    <!-- Upload File Form -->
+    <section>
+        <h3>Upload File</h3>
+        <form action="/upload" method="post" enctype="multipart/form-data">
+            <!-- IMPORTANT: folderId comes before the file input so Multer can read it in destination() -->
+            <input type="hidden" name="folderId" value="<%= currentFolder ? currentFolder.id : '' %>">
+            <input type="file" name="uploaded_file" required>
+            <button type="submit">Upload</button>
+        </form>
+        <% if (!currentFolder) { %>
+            <p style="color:#a00;">Note: choose/enter a folder first—files live inside folders.</p>
+            <% } %>
+    </section>
+
+    <hr />
+
+    <!-- Folders -->
+    <section>
+        <h3>Folders</h3>
+        <% if (folders && folders.length) { %>
+            <ul>
+                <% folders.forEach(f=> { %>
+                    <li><a href="/drive/<%= f.id %>">
+                            <%= f.name %>
+                        </a></li>
+                    <% }) %>
+            </ul>
+            <% } else { %>
+                <p>No folders here yet.</p>
+                <% } %>
+    </section>
+
+    <!-- Files -->
+    <section>
+        <h3>Files</h3>
+        <% if (files && files.length) { %>
+            <ul>
+                <% files.forEach(file=> { %>
+                    <li>
+                        <%= file.originalName %>
+                    </li>
+                    <% }) %>
+            </ul>
+            <% } else { %>
+                <p>No files in this folder.</p>
+                <% } %>
+    </section>
+</body>
+
+</html>
