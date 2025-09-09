@@ -7,7 +7,6 @@ const {
   listFiles,
   renameFolder,
 } = require("../db/queries");
-const passport = require("passport");
 
 const getDriveRoot = async (req, res, next) => {
   try {

@@ -10,21 +10,8 @@ const { prisma } = require("./db/prisma");
 
 // const { pool } = require("./db/pool");
 
-const {
-  getIndex,
-  getSignupForm,
-  postSignup,
-  postLogin,
-  getAfterLogin,
-} = require("./controllers/authController");
-
-const {
-  postCreateFolder,
-  getDriveFolder,
-  getDriveRoot,
-  postDeleteFolder,
-  postRenameFolder,
-} = require("./controllers/driveController");
+const authRouter = require("./routes/authRouter");
+const driveRouter = require("./routes/driveRouter");
 
 const {
   getFileDetails,
@@ -95,7 +82,8 @@ require("./db/passport");
 app.use(passport.initialize());
 app.use(passport.session());
 
-//---HELPER FUNCTIONS --- //
+app.use("/", authRouter);
+app.use("/", driveRouter);
 
 function ensureAuth(req, res, next) {
   if (req.isAuthenticated && req.isAuthenticated()) return next();
@@ -103,16 +91,6 @@ function ensureAuth(req, res, next) {
 }
 
 // --- GET ROUTES --- //
-
-app.get("/", getIndex);
-
-app.get("/sign-up", getSignupForm);
-
-app.get("/after-login", ensureAuth, getAfterLogin);
-
-app.get("/drive", ensureAuth, getDriveRoot);
-
-app.get("/drive/:folderId", ensureAuth, getDriveFolder);
 
 // Show a file's details page
 app.get("/files/:id", ensureAuth, getFileDetails);
@@ -122,22 +100,12 @@ app.get("/files/:id/download", ensureAuth, getFileDownload);
 
 //--- POST ROUTES ---//
 
-app.post("/sign-up", postSignup);
-
-app.post("/login", postLogin);
-
 app.post("/upload", ensureAuth, upload.single("uploaded_file"), postFileUpload);
-
-app.post("/folders", ensureAuth, postCreateFolder);
-
-// Rename a folder
-app.post("/folders/:id/rename", ensureAuth, postRenameFolder);
 
 // Rename a file
 app.post("/files/:id/rename", ensureAuth, postRenameFile);
 
 // DELETE FOLDER
-app.post("/folders/:id/delete", ensureAuth, postDeleteFolder);
 
 // DELETE FILE (disk + DB)
 
