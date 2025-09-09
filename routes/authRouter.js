@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const { ensureAuth } = require("../middleware/ensureAuth");
 
 const {
   getIndex,
@@ -8,11 +9,6 @@ const {
   postLogin,
   getAfterLogin,
 } = require("../controllers/authController");
-
-function ensureAuth(req, res, next) {
-  if (req.isAuthenticated && req.isAuthenticated()) return next();
-  res.redirect("/");
-}
 
 router.get("/", getIndex);
 

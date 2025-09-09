@@ -1,5 +1,6 @@
 const express = require("express");
 const router = express.Router();
+const { ensureAuth } = require("../middleware/ensureAuth");
 
 const {
   postCreateFolder,
@@ -8,11 +9,6 @@ const {
   postDeleteFolder,
   postRenameFolder,
 } = require("../controllers/driveController");
-
-function ensureAuth(req, res, next) {
-  if (req.isAuthenticated && req.isAuthenticated()) return next();
-  res.redirect("/");
-}
 
 router.get("/drive", ensureAuth, getDriveRoot);
 
