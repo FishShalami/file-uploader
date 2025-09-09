@@ -33,7 +33,13 @@ const {
   getAfterLogin,
 } = require("./controllers/authController");
 
-const { postCreateFolder } = require("./controllers/driveController");
+const {
+  postCreateFolder,
+  getDriveFolder,
+  getDriveRoot,
+  postDeleteFolder,
+  postRenameFolder,
+} = require("./controllers/driveController");
 
 const multer = require("multer");
 const fs = require("node:fs/promises");
@@ -111,48 +117,9 @@ app.get("/sign-up", getSignupForm);
 
 app.get("/after-login", ensureAuth, getAfterLogin);
 
-app.get("/drive", ensureAuth, async (req, res, next) => {
-  try {
-    const ownerId = req.user.id;
-    const folders = await getRoot(ownerId);
-    // No files at root in our simple model (files live inside a folder)
-    res.render("drive", {
-      user: req.user,
-      currentFolder: null,
-      parentChain: [], // breadcrumb for root is empty
-      folders,
-      files: [],
-    });
-  } catch (err) {
-    next(err);
-  }
-});
+app.get("/drive", ensureAuth, getDriveRoot);
 
-app.get("/drive/:folderId", ensureAuth, async (req, res, next) => {
-  try {
-    const ownerId = req.user.id;
-    const folderId = Number(req.params.folderId);
-    const currentFolder = await getFolder(folderId, ownerId);
-    if (!currentFolder) return res.status(404).send("Folder not found");
-
-    const folders = await listChildren(folderId, ownerId);
-    const files = await listFiles(folderId, ownerId);
-
-    // Minimal breadcrumb: just parent if exists (we’ll keep it simple)
-    const parentChain = [];
-    if (currentFolder.parent) parentChain.push(currentFolder.parent);
-
-    res.render("drive", {
-      user: req.user,
-      currentFolder,
-      parentChain,
-      folders,
-      files,
-    });
-  } catch (err) {
-    next(err);
-  }
-});
+app.get("/drive/:folderId", ensureAuth, getDriveFolder);
 
 // Show a file's details page
 app.get("/files/:id", ensureAuth, async (req, res, next) => {
@@ -241,22 +208,7 @@ app.post(
 app.post("/folders", ensureAuth);
 
 // Rename a folder
-app.post("/folders/:id/rename", ensureAuth, async (req, res, next) => {
-  try {
-    if (!/^\d+$/.test(req.params.id))
-      return res.status(400).send("Invalid folder id");
-    const ownerId = req.user.id;
-    const folderId = Number(req.params.id);
-    const newName = String(req.body.name || "").trim();
-
-    await renameFolder(folderId, ownerId, newName);
-
-    const returnTo = req.body.returnTo || req.headers.referer || "/drive";
-    return res.redirect(returnTo);
-  } catch (err) {
-    next(err);
-  }
-});
+app.post("/folders/:id/rename", ensureAuth, postRenameFolder);
 
 // Rename a file
 app.post("/files/:id/rename", ensureAuth, async (req, res, next) => {
@@ -277,29 +229,7 @@ app.post("/files/:id/rename", ensureAuth, async (req, res, next) => {
 });
 
 // DELETE FOLDER
-app.post("/folders/:id/delete", ensureAuth, async (req, res, next) => {
-  try {
-    if (!/^\d+$/.test(req.params.id))
-      return res.status(400).send("Invalid folder id");
-    const ownerId = req.user.id;
-    const folderId = Number(req.params.id);
-
-    // (Optional) fetch parent to build a fallback redirect
-    const f = await getFolder(folderId, ownerId); // includes parent
-    if (!f) return res.status(404).send("Folder not found");
-
-    await deleteFolder(folderId, ownerId);
-
-    const returnTo =
-      req.body.returnTo ||
-      req.headers.referer ||
-      (f.parent ? `/drive/${f.parent.id}` : "/drive");
-
-    return res.redirect(returnTo);
-  } catch (err) {
-    next(err);
-  }
-});
+app.post("/folders/:id/delete", ensureAuth, postDeleteFolder);
 
 // DELETE FILE (disk + DB)
 const fsp = require("node:fs/promises");
