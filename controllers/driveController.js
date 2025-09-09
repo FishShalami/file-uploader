@@ -6,7 +6,6 @@ const {
   listChildren,
   listFiles,
   renameFolder,
-  renameFile,
 } = require("../db/queries");
 const passport = require("passport");
 

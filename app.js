@@ -11,21 +11,6 @@ const { prisma } = require("./db/prisma");
 // const { pool } = require("./db/pool");
 
 const {
-  getRoot,
-  getFolder,
-  listChildren,
-  listFiles,
-  createFolder,
-  createFile,
-  renameFile,
-  renameFolder,
-  deleteFolder,
-  getFileMeta,
-  deleteFileRecord,
-  getFileDetails,
-} = require("./db/queries");
-
-const {
   getIndex,
   getSignupForm,
   postSignup,
@@ -40,6 +25,14 @@ const {
   postDeleteFolder,
   postRenameFolder,
 } = require("./controllers/driveController");
+
+const {
+  getFileDetails,
+  getFileDownload,
+  postFileUpload,
+  postRenameFile,
+  postDeleteFile,
+} = require("./controllers/fileController");
 
 const multer = require("multer");
 const fs = require("node:fs/promises");
@@ -122,52 +115,10 @@ app.get("/drive", ensureAuth, getDriveRoot);
 app.get("/drive/:folderId", ensureAuth, getDriveFolder);
 
 // Show a file's details page
-app.get("/files/:id", ensureAuth, async (req, res, next) => {
-  try {
-    if (!/^\d+$/.test(req.params.id))
-      return res.status(400).send("Invalid file id");
-    const ownerId = req.user.id;
-    const fileId = Number(req.params.id);
-
-    const file = await getFileDetails(fileId, ownerId);
-    if (!file) return res.status(404).send("File not found");
-
-    res.render("file-detail", { user: req.user, file });
-  } catch (err) {
-    next(err);
-  }
-});
+app.get("/files/:id", ensureAuth, getFileDetails);
 
 // Download the file
-app.get("/files/:id/download", ensureAuth, async (req, res, next) => {
-  try {
-    if (!/^\d+$/.test(req.params.id))
-      return res.status(400).send("Invalid file id");
-    const ownerId = req.user.id;
-    const fileId = Number(req.params.id);
-
-    // Minimal: reuse details/meta to get folderId + key
-    const file = await getFileDetails(fileId, ownerId);
-    if (!file) return res.status(404).send("File not found");
-
-    const diskPath = path.join(
-      __dirname,
-      "uploads",
-      String(file.folderId),
-      file.key
-    );
-    // res.download streams the file and sets Content-Disposition: attachment
-    return res.download(diskPath, file.originalName, (err) => {
-      if (err) {
-        if (err.code === "ENOENT")
-          return res.status(404).send("File missing on disk");
-        return next(err);
-      }
-    });
-  } catch (err) {
-    next(err);
-  }
-});
+app.get("/files/:id/download", ensureAuth, getFileDownload);
 
 //--- POST ROUTES ---//
 
@@ -175,99 +126,22 @@ app.post("/sign-up", postSignup);
 
 app.post("/login", postLogin);
 
-app.post(
-  "/upload",
-  ensureAuth,
-  upload.single("uploaded_file"),
-  async (req, res, next) => {
-    try {
-      const ownerId = req.user.id;
-      const folderId = Number(req.body.folderId);
-      if (!folderId) throw new Error("folderId is required");
+app.post("/upload", ensureAuth, upload.single("uploaded_file"), postFileUpload);
 
-      const f = req.file;
-      if (!f) throw new Error("No file uploaded");
-
-      await createFile({
-        ownerId,
-        folderId,
-        originalName: f.originalname,
-        key: f.filename, // the saved disk name
-        mimeType: f.mimetype,
-        sizeBytes: f.size,
-        ext: path.extname(f.originalname || ""),
-      });
-
-      return res.redirect(`/drive/${folderId}`);
-    } catch (err) {
-      next(err);
-    }
-  }
-);
-
-app.post("/folders", ensureAuth);
+app.post("/folders", ensureAuth, postCreateFolder);
 
 // Rename a folder
 app.post("/folders/:id/rename", ensureAuth, postRenameFolder);
 
 // Rename a file
-app.post("/files/:id/rename", ensureAuth, async (req, res, next) => {
-  try {
-    if (!/^\d+$/.test(req.params.id))
-      return res.status(400).send("Invalid file id");
-    const ownerId = req.user.id;
-    const fileId = Number(req.params.id);
-    const newName = String(req.body.name || "").trim();
-
-    await renameFile(fileId, ownerId, newName);
-
-    const returnTo = req.body.returnTo || req.headers.referer || "/drive";
-    return res.redirect(returnTo);
-  } catch (err) {
-    next(err);
-  }
-});
+app.post("/files/:id/rename", ensureAuth, postRenameFile);
 
 // DELETE FOLDER
 app.post("/folders/:id/delete", ensureAuth, postDeleteFolder);
 
 // DELETE FILE (disk + DB)
-const fsp = require("node:fs/promises");
 
-app.post("/files/:id/delete", ensureAuth, async (req, res, next) => {
-  try {
-    if (!/^\d+$/.test(req.params.id))
-      return res.status(400).send("Invalid file id");
-    const ownerId = req.user.id;
-    const fileId = Number(req.params.id);
-
-    // 1) Get file info (owner-scoped)
-    const meta = await getFileMeta(fileId, ownerId);
-    if (!meta) return res.status(404).send("File not found");
-
-    // 2) Delete from disk (ignore if already missing)
-    const diskPath = path.join(
-      __dirname,
-      "uploads",
-      String(meta.folderId),
-      meta.key
-    );
-    try {
-      await fsp.unlink(diskPath);
-    } catch (e) {
-      if (e && e.code !== "ENOENT") throw e; // ignore missing, bubble up other errors
-    }
-
-    // 3) Remove DB record
-    await deleteFileRecord(fileId);
-
-    const returnTo =
-      req.body.returnTo || req.headers.referer || `/drive/${meta.folderId}`;
-    return res.redirect(returnTo);
-  } catch (err) {
-    next(err);
-  }
-});
+app.post("/files/:id/delete", ensureAuth, postDeleteFile);
 
 const PORT = process.env.PORT || 3000;
 

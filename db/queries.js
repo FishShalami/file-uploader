@@ -219,7 +219,7 @@ async function deleteFileRecord(fileId) {
 }
 
 // Get full details for a file (owner-scoped)
-async function getFileDetails(fileId, ownerId) {
+async function getFileDeets(fileId, ownerId) {
   return prisma.file.findFirst({
     where: { id: fileId, ownerId },
     select: {
@@ -251,5 +251,5 @@ module.exports = {
   deleteFileRecord,
   getFileMeta,
   deleteFolder,
-  getFileDetails,
+  getFileDeets,
 };
