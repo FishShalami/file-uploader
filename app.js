@@ -8,8 +8,6 @@ const passport = require("passport");
 const { PrismaSessionStore } = require("@quixo3/prisma-session-store");
 const { prisma } = require("./db/prisma");
 
-// const { pool } = require("./db/pool");
-
 const authRouter = require("./routes/authRouter");
 const driveRouter = require("./routes/driveRouter");
 const fileRouter = require("./routes/fileRouter");
@@ -23,7 +21,6 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
 //Session
-
 app.use(
   session({
     cookie: {
@@ -46,6 +43,20 @@ app.use(passport.session());
 app.use("/", authRouter);
 app.use("/", driveRouter);
 app.use("/", fileRouter);
+
+// 404 error
+
+app.use((req, res) => {
+  const backHref = req.isAuthenticated?.() ? "/drive" : "/";
+  res.status(404).render("404", { backHref });
+});
+
+// Error handler
+app.use((err, req, res, next) => {
+  console.error(err);
+  // Minimal dev-friendly output; keep generic in prod
+  res.status(500).send("Something went wrong.");
+});
 
 const PORT = process.env.PORT || 3000;
 
